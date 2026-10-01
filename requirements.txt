@@ -1,0 +1,6 @@
+numpy==2.2.6
+scipy==1.15.3
+trimesh==5.1.0
+coacd==1.0.14
+polyscope==2.6.1
+pchs @ git+https://github.com/alecjacobson/progressive-convex-hull-simplification.git@53af45bfa4a65fc22669a7eafd78d5102b719fa2
