@@ -45,7 +45,7 @@ def load_shape(path):
     return vertices, triangles
 
 
-def decompose(vertices, triangles, threshold=0.05, preprocess_mode="auto"):
+def decompose(vertices, triangles, threshold=0.02, preprocess_mode="auto"):
     """Return CoACD's unsimplified hulls as a list of (vertices, triangles)."""
     return coacd.run_coacd(
         coacd.Mesh(vertices, triangles),
@@ -57,6 +57,27 @@ def decompose(vertices, triangles, threshold=0.05, preprocess_mode="auto"):
         seed=0,
         # max_ch_vertex is intentionally omitted: it only applies if decimate=True.
     )
+
+
+def frame_scene(points):
+    """Fit the camera and canvas to the displayed geometry with a small margin."""
+    back = np.array([0.0, -1.1, 2.0])
+    back /= np.linalg.norm(back)
+    right = np.array([1.0, 0.0, 0.0])
+    basis = np.column_stack((right, np.cross(back, right), back))
+    camera_points = points @ basis
+    center = (camera_points.min(axis=0) + camera_points.max(axis=0)) / 2
+    camera_points -= center
+    # A distant perspective camera keeps the three copies at similar scale.
+    distance = 3 * np.ptp(camera_points, axis=0).max()
+    projected = camera_points[:, :2] / (distance - camera_points[:, 2:3])
+    half_width, half_height = np.abs(projected).max(axis=0) * 1.06
+    width = 2400
+    height = max(1, round(width * half_height / half_width))
+    ps.set_window_size(width, height)
+    ps.set_vertical_fov_degrees(np.degrees(2 * np.arctan(half_height)))
+    target = basis @ center
+    ps.look_at(target + distance * back, target)
 
 
 def display(vertices, triangles, raw_hulls, simplified_hulls, headless, screenshot):
@@ -73,25 +94,30 @@ def display(vertices, triangles, raw_hulls, simplified_hulls, headless, screensh
     center = (vertices.min(axis=0) + vertices.max(axis=0)) / 2
     scale = np.ptp(vertices, axis=0).max()
     normals = trimesh.Trimesh(vertices, triangles, process=False).vertex_normals
+    all_vertices = np.vstack([vertices] + [v for v, _ in raw_hulls + simplified_hulls])
+    spacing = 1.1 * np.ptp(all_vertices[:, 0]) / scale
+    displayed_points = []
     labels = ["Original", "CoACD (decimate=False)", "CoACD + PCHS"]
     for column, label in enumerate(labels):
-        offset = np.array([(column - 1) * 1.3, 0, 0])
+        offset = np.array([(column - 1) * spacing, 0, 0])
         # Slightly inset the overlay's original to avoid coincident-surface flicker.
         original_v = vertices if column == 0 else vertices - 0.002 * scale * normals
+        displayed_points.append((original_v - center) / scale + offset)
         ps.register_surface_mesh(
-            f"{label}/original", (original_v - center) / scale + offset, triangles,
+            f"{label}/original", displayed_points[-1], triangles,
             color=(0.55, 0.57, 0.60), smooth_shade=True,
         )
         hulls = [[], raw_hulls, simplified_hulls][column]
         for i, (hull_v, hull_f) in enumerate(hulls):
             color = colorsys.hsv_to_rgb((0.08 + i * 0.618034) % 1, 0.65, 0.9)
+            displayed_points.append((hull_v - center) / scale + offset)
             ps.register_surface_mesh(
-                f"{label}/hull {i:02d}", (hull_v - center) / scale + offset,
+                f"{label}/hull {i:02d}", displayed_points[-1],
                 hull_f, color=color, edge_color=(0.12, 0.14, 0.18),
                 edge_width=0.7, transparency=0.45, smooth_shade=False,
             )
 
-    ps.look_at((0, -1.1, 2.0), (0, 0, 0))
+    frame_scene(np.vstack(displayed_points))
     print("View, left to right: original | CoACD over original | PCHS over original")
     if headless:
         screenshot.parent.mkdir(parents=True, exist_ok=True)
@@ -104,10 +130,10 @@ def display(vertices, triangles, raw_hulls, simplified_hulls, headless, screensh
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mesh", nargs="?", type=Path, help="OBJ/PLY/STL/...; default: torus")
-    parser.add_argument("--target-faces", type=int, default=12,
-                        help="PCHS supporting-plane budget per hull (default: 12)")
-    parser.add_argument("--threshold", type=float, default=0.05,
-                        help="CoACD concavity threshold (default: 0.05)")
+    parser.add_argument("--target-faces", type=int, default=18,
+                        help="PCHS supporting-plane budget per hull (default: 18)")
+    parser.add_argument("--threshold", type=float, default=0.02,
+                        help="CoACD concavity threshold (default: 0.02)")
     parser.add_argument("--preprocess-mode", choices=["auto", "on", "off"], default="auto")
     parser.add_argument("--headless", action="store_true", help="Render via EGL and exit")
     parser.add_argument("--screenshot", type=Path, default=Path("render.png"),

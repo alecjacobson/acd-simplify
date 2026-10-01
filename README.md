@@ -11,6 +11,9 @@ and display the hulls over the original mesh in Polyscope.
 Left to right: **original**, **unsimplified CoACD hulls over original**,
 **PCHS hulls over original**. Corresponding hulls use the same color. PCHS
 polygons are drawn directly, so their edges do not include triangulation diagonals.
+The defaults are a **CoACD concavity threshold of `0.02`** and a **PCHS budget
+of 18 polygon faces per hull**. The camera and image height fit the displayed
+geometry with a small margin; PNGs are 2,400 pixels wide.
 
 ### Dragon
 
@@ -22,14 +25,15 @@ triangles), with the same left-to-right layout:
 ```bash
 OMP_NUM_THREADS=8 python example.py \
   ../sparse-solver-benchmark/xyzrgb_dragon-720K.ply \
-  --target-faces 12 --headless --screenshot docs/dragon.png
+  --headless --screenshot docs/dragon.png
 ```
 
 The input mesh is external to this repository; replace the path with your local
-copy. This uses the full input mesh, CoACD's default `0.05` concavity threshold
+copy. This uses the full input mesh, the example's `0.02` concavity threshold
 and `auto` preprocessing, and disables native hull decimation.
-On the test machine, CoACD produced **50 hulls in 44.32 seconds**; PCHS reduced
-each hull to **12 polygon faces** in **0.27 seconds total** (rendering excluded).
+CoACD produced **180 hulls in 51.47 seconds** on the test machine. PCHS took
+**0.52 seconds total**: 171 hulls ended with 18 polygon faces and 9 already had
+fewer faces (rendering excluded).
 
 ## Install
 
@@ -57,7 +61,7 @@ setting matters when pip builds PCHS, not when running the example.
 python example.py
 
 # Your own mesh. Trimesh loads OBJ, PLY, STL, etc.
-python example.py path/to/shape.obj --target-faces 12
+python example.py path/to/shape.obj --target-faces 18
 
 # For clean, closed inputs, skip CoACD's manifold preprocessing.
 python example.py path/to/shape.obj --preprocess-mode off
@@ -85,6 +89,7 @@ The important part of [example.py](example.py) is:
 ```python
 raw_hulls = coacd.run_coacd(
     coacd.Mesh(vertices, triangles),
+    threshold=0.02,
     decimate=False,  # Do not simplify CoACD's output hulls.
     extrude=False,
     apx_mode="ch",
@@ -121,7 +126,11 @@ point of the original surface.
 ## Validation
 
 Tested with Python 3.10 on Linux using the pinned dependencies and EGL rendering.
-The built-in torus produced 9 CoACD hulls; PCHS reduced every hull to 12 polygon
-faces. Also checked OBJ loading with preprocessing disabled, closed and
-consistently oriented output surfaces, and containment of every unsimplified
-hull vertex in its simplified hull (halfspace tolerance `1e-7`).
+Both checked-in PNGs were rerendered with the defaults above. The torus produced
+18 CoACD hulls (3.47 seconds), all simplified to 18 polygon faces (0.06 seconds
+total). The dragon produced 180 hulls, with output counts described above.
+
+Earlier smoke checks at threshold `0.05` and target 12 also covered OBJ loading
+with preprocessing disabled, closed and consistently oriented output surfaces,
+and containment of every unsimplified hull vertex in its simplified hull
+(halfspace tolerance `1e-7`).
