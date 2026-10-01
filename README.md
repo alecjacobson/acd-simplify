@@ -12,6 +12,25 @@ Left to right: **original**, **unsimplified CoACD hulls over original**,
 **PCHS hulls over original**. Corresponding hulls use the same color. PCHS
 polygons are drawn directly, so their edges do not include triangulation diagonals.
 
+### Dragon
+
+The same pipeline on `xyzrgb_dragon-720K.ply` (360,757 vertices, 721,510
+triangles), with the same left-to-right layout:
+
+![Dragon: original, unsimplified CoACD overlay, and PCHS overlay](docs/dragon.png)
+
+```bash
+OMP_NUM_THREADS=8 python example.py \
+  ../sparse-solver-benchmark/xyzrgb_dragon-720K.ply \
+  --target-faces 12 --headless --screenshot docs/dragon.png
+```
+
+The input mesh is external to this repository; replace the path with your local
+copy. This uses the full input mesh, CoACD's default `0.05` concavity threshold
+and `auto` preprocessing, and disables native hull decimation.
+On the test machine, CoACD produced **50 hulls in 44.32 seconds**; PCHS reduced
+each hull to **12 polygon faces** in **0.27 seconds total** (rendering excluded).
+
 ## Install
 
 Use Python 3.10+ and Git. PCHS compiles a C++ extension, so a **C++17 compiler**
